@@ -32,17 +32,13 @@ import org.wso2.choreo.connect.tests.util.TestConstant;
 import org.wso2.choreo.connect.tests.util.Utils;
 import org.wso2.choreo.connect.tests.util.websocket.WsClient;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Websocket Throttling for APIs in APIM 4.1.0-alpha
+ * Websocket Throttling for APIs in APIM 4.1.0
  *
  * Supported
  * - Event count throttling via Type REQUESTCOUNTLIMIT
@@ -51,7 +47,7 @@ import java.util.Map;
  * Not supported
  * - Request count throttling
  */
-public class WebsocketApiLevelThrottleTestCase extends ApimBaseTest {
+public class WebsocketApiThrottleClientTestCase extends ApimBaseTest {
     private static final String BANDWIDTH_THROTTLE_API_NAME = "WebsocketApiLevelBandwidthThrottleAPI";
     private static final String BANDWIDTH_THROTTLE_API_CONTEXT = "websocket-api-level-bandwidth-throttle";
 
@@ -63,6 +59,8 @@ public class WebsocketApiLevelThrottleTestCase extends ApimBaseTest {
 
     private static final String BANDWIDTH_THROTTLE_API_POLICY_NAME = "3KbPerMin";
     private static final String EVENT_COUNT_THROTTLE_API_POLICY_NAME = "5ReqPerMin";
+
+    private static final int throttleBandwidth = 3;
     private static final int throttleCount = 5;
 
     private final Map<String, String> headers = new HashMap<>();
@@ -88,7 +86,7 @@ public class WebsocketApiLevelThrottleTestCase extends ApimBaseTest {
     }
 
     @Test(description = "Test API Level Bandwidth Throttling")
-    public void testAPILevelBandwidthThrottling() throws Exception {
+    public void testAPIClientBandwidthThrottling() throws Exception {
         HttpResponse api = publisherRestClient.getAPI(bandwidthThrottleApiId);
         Gson gson = new Gson();
         APIDTO apidto = gson.fromJson(api.getData(), APIDTO.class);
@@ -101,19 +99,12 @@ public class WebsocketApiLevelThrottleTestCase extends ApimBaseTest {
         Utils.delay(TestConstant.DEPLOYMENT_WAIT_TIME*2, "Couldn't wait until the API was deployed in Choreo Connect");
 
         WsClient wsClient = new WsClient(bandwidthThrottleEndpoint, headers);
-        String largePayload = "a".repeat(1024);
-        List<String> messages = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
-            messages.add(largePayload);
-        }
-        messages.add("close");
-        List<String> responses = wsClient.retryConnectUntilDeployed(messages, 0);
-        Assert.assertTrue(responses.size() >= 3 && responses.size() < 10,
+        Assert.assertTrue(wsClient.isClientBandwidthThrottled(throttleBandwidth),
                 "Websocket connection was not throttled on bandwidth.");
     }
 
     @Test(description = "Test API Level EventCount Throttling")
-    public void testAPILevelEventCountThrottling() throws Exception {
+    public void testAPIClientEventCountThrottling() throws Exception {
         HttpResponse api = publisherRestClient.getAPI(eventCountThrottleApiId);
         Gson gson = new Gson();
         APIDTO apidto = gson.fromJson(api.getData(), APIDTO.class);
@@ -126,7 +117,8 @@ public class WebsocketApiLevelThrottleTestCase extends ApimBaseTest {
         Utils.delay(TestConstant.DEPLOYMENT_WAIT_TIME*2, "Couldn't wait until the API was deployed in Choreo Connect");
 
         WsClient wsClient = new WsClient(eventCountThrottleEndpoint, headers);
-        Assert.assertTrue(wsClient.isThrottledWebSocket(throttleCount), "Request not throttled by event count");
-        // TODO: (suksw) Add testcase for client sent event count throttling
+        Assert.assertTrue(wsClient.isClientEventCountThrottled(throttleCount),
+                "Websocket connection was not throttled on event count.");
     }
+
 }

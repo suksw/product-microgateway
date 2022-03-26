@@ -28,23 +28,27 @@ import org.wso2.choreo.connect.tests.util.TestConstant;
 import org.wso2.choreo.connect.tests.util.Utils;
 import org.wso2.choreo.connect.tests.util.websocket.WsClient;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Websocket Throttling for Subscriptions in APIM 4.1.0-alpha
+ * Websocket Throttling for Applications in APIM 4.1.0
  *
  * Supported
- * - Event count throttling via Type EVENTCOUNTLIMIT
+ * - Event count throttling via Type REQUESTCOUNTLIMIT
+ * - Bandwidth throttling via Type BANDWIDTHLIMIT
  *
  * Not supported
  * - Request count throttling
- * - Bandwidth throttling
  */
-public class WebsocketSubscriptionThrottleTestCase extends ApimBaseTest {
-    private static final String API_CONTEXT = "websocket-subscription-throttle";
+public class WebsocketAppThrottleClientTestCase extends ApimBaseTest {
+    private static final String API_CONTEXT = "websocket-basic"; // Reusing the WebSocketBasicAPI
     private static final String API_VERSION = "1.0.0";
-    private static final String EVENT_COUNT_THROTTLE_APPLICATION_NAME = "WebSocketSubscriptionEventCountThrottleApp";
+    private static final String BANDWIDTH_THROTTLE_APPLICATION_NAME = "WebSocketAppBandwidthThrottleApp";
+    private static final String EVENT_COUNT_THROTTLE_APPLICATION_NAME = "WebSocketAppEventCountThrottleApp";
+    private static final int throttleBandwidth = 3;
     private static final int throttleCount = 5;
 
     private String endpoint;
@@ -55,8 +59,21 @@ public class WebsocketSubscriptionThrottleTestCase extends ApimBaseTest {
         endpoint = Utils.getServiceURLWebSocket(API_CONTEXT + "/" + API_VERSION);
     }
 
-    @Test(description = "Test Subscription EventCount throttling")
-    public void testSubscriptionEventCountThrottling() throws Exception {
+    @Test(description = "Test API level throttling with default limits")
+    public void testAppClientBandwidthThrottling() throws Exception {
+        String applicationId = ApimResourceProcessor.applicationNameToId.get(BANDWIDTH_THROTTLE_APPLICATION_NAME);
+        String accessToken = StoreUtils.generateUserAccessToken(apimServiceURLHttps, applicationId,
+                user, storeRestClient);
+        Map<String, String> headers = new HashMap<>();
+        headers.put(TestConstant.AUTHORIZATION_HEADER, "Bearer " + accessToken);
+
+        WsClient wsClient = new WsClient(endpoint, headers);
+        Assert.assertTrue(wsClient.isClientBandwidthThrottled(throttleBandwidth),
+                "Websocket connection was not throttled on bandwidth.");
+    }
+
+    @Test(description = "Test API level throttling with default limits")
+    public void testAppClientEventCountThrottling() throws Exception {
         String applicationId = ApimResourceProcessor.applicationNameToId.get(EVENT_COUNT_THROTTLE_APPLICATION_NAME);
         String accessToken = StoreUtils.generateUserAccessToken(apimServiceURLHttps, applicationId,
                 user, storeRestClient);
@@ -64,8 +81,7 @@ public class WebsocketSubscriptionThrottleTestCase extends ApimBaseTest {
         headers.put(TestConstant.AUTHORIZATION_HEADER, "Bearer " + accessToken);
 
         WsClient wsClient = new WsClient(endpoint, headers);
-        Assert.assertTrue(wsClient.isThrottledWebSocket(throttleCount),
-                "Request not throttled by event count condition");
-        // TODO: (suksw) Add testcase for client sent event count throttling
+        Assert.assertTrue(wsClient.isClientEventCountThrottled(throttleCount),
+                "Websocket connection was not throttled on event count.");
     }
 }

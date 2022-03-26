@@ -44,6 +44,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testng.Assert;
 import org.wso2.choreo.connect.tests.context.CCTestException;
 import org.wso2.choreo.connect.tests.util.Utils;
 
@@ -154,7 +155,7 @@ public final class WsClient {
                 ch.writeAndFlush(frame);
             }
             // Remove the following once https://github.com/wso2/product-microgateway/issues/2706 is fixed
-            Utils.delay(1000, "Interrupted while waiting after sending one frame");
+            Utils.delay(1100, "Interrupted while waiting after sending one frame");
         }
     }
 
@@ -193,9 +194,30 @@ public final class WsClient {
         return true;
     }
 
-    public boolean isThrottledWebSocket(int expectedCount) throws InterruptedException {
-        // Similar to HTTP throttling, this buffer is to avoid failures due to delays in evaluating throttle
-        // conditions at TM here it sets the final throttle request count twice as the limit set in the policy.
+    public boolean isServerBandwidthThrottled(int expectedCount) throws InterruptedException {
+        // Similar to HTTP throttling, this buffer is to avoid failures due to delays in evaluating throttle conditions
+        // it will make sure throttle will happen even if the throttle window passed.
+        int throttleBuffer = expectedCount * 2;
+        boolean isThrottled = false;
+        List<String> messagesToSend = new ArrayList<>();
+        messagesToSend.add("send me. large frames. " + throttleBuffer);
+        List<String> responses = retryConnectUntilDeployed(messagesToSend, throttleBuffer * 1100);
+        if (responses.size() >= expectedCount && responses.size() < throttleBuffer) {
+            isThrottled = true;
+        }
+        for (String response: responses) {
+            if (response.length() > 100) {
+                log.info("============== Large response received");
+            } else {
+                log.error("Did not receive expected response");
+            }
+        }
+
+        return isThrottled;
+    }
+
+    public boolean isServerEventCountThrottled(int expectedCount) throws InterruptedException {
+        // Similar to HTTP throttling, this buffer is to avoid failures due to delays in evaluating throttle conditions
         // it will make sure throttle will happen even if the throttle window passed.
         int throttleBuffer = expectedCount + 10;
         boolean isThrottled = false;
@@ -207,6 +229,43 @@ public final class WsClient {
         }
         for (String response: responses) {
             log.info("============== Response {}", response);
+        }
+
+        return isThrottled;
+    }
+
+    public boolean isClientBandwidthThrottled(int expectedCount) throws InterruptedException {
+        // Similar to HTTP throttling, this buffer is to avoid failures due to delays in evaluating throttle conditions
+        // it will make sure throttle will happen even if the throttle window passed.
+        int throttleBuffer = expectedCount + 10;
+        boolean isThrottled = false;
+        String oneKBPayload = "a".repeat(1024);
+        List<String> messagesToSend = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            messagesToSend.add(oneKBPayload);
+        }
+        messagesToSend.add("close");
+        List<String> responses = retryConnectUntilDeployed(messagesToSend, throttleBuffer * 1100);
+        if (responses.size() >= expectedCount && responses.size() < throttleBuffer) {
+            isThrottled = true;
+        }
+
+        return isThrottled;
+    }
+
+    public boolean isClientEventCountThrottled(int expectedCount) throws InterruptedException {
+        // Similar to HTTP throttling, this buffer is to avoid failures due to delays in evaluating throttle conditions
+        // it will make sure throttle will happen even if the throttle window passed.
+        int throttleBuffer = expectedCount + 10;
+        boolean isThrottled = false;
+        List<String> messagesToSend = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            messagesToSend.add("message " + i);
+        }
+        messagesToSend.add("close");
+        List<String> responses = retryConnectUntilDeployed(messagesToSend, throttleBuffer * 1100);
+        if (responses.size() >= expectedCount && responses.size() < throttleBuffer) {
+            isThrottled = true;
         }
 
         return isThrottled;
